@@ -8,6 +8,7 @@
         <a href="https://github.com/organizedgrime/polyblade/actions/workflows/ci.yml"> 
             <img src="https://img.shields.io/github/actions/workflow/status/organizedgrime/polyblade/ci.yml?style=for-the-badge&label=CI%20Status"/>
         </a>
+<a href="https://app.fossa.com/projects/git%2Bgithub.com%2Forganizedgrime%2Fpolyblade?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Forganizedgrime%2Fpolyblade.svg?type=shield"/></a>
         <a href="LICENSE"> 
             <img src="https://img.shields.io/badge/license-APGL3-blue.svg?style=for-the-badge"/>
         </a>
@@ -30,6 +31,9 @@
         <br/>
     </p>
 </div>
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Forganizedgrime%2Fpolyblade.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Forganizedgrime%2Fpolyblade?ref=badge_large)
 
 ## Installation
 ```cargo install polyblade```
