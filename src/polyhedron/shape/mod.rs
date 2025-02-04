@@ -1,6 +1,7 @@
 mod conway;
 mod cycles;
 mod distance;
+mod planarity;
 mod platonic;
 use std::{fmt::Display, ops::Range};
 
