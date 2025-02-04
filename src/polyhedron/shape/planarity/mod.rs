@@ -20,6 +20,16 @@ pub fn is_planar(&self) -> bool {
 
     // L-R partition phase
 
+    for v in state.roots.clone() {
+        // let res = lr_visit_ordered_dfs_tree(&mut state, v, |state, event| {
+        //     state.lr_testing_visitor(event)
+        // });
+        // if res.is_err() {
+        //     return false;
+        // }
+    }
+
+
     false
 }
 }
@@ -101,4 +111,74 @@ fn time_post_inc(x: &mut Time) -> Time {
     let v = *x;
     *x += 1;
     v
+}
+
+
+/// Visits the DFS - oriented tree that we have pre-computed
+/// and stored in ``lr_state``. We traverse the edges of
+/// a node in nesting depth order. Events are emitted at points
+/// of interest and should be handled by ``visitor``.
+fn lr_visit_ordered_dfs_tree<G, F, E>(
+    lr_state: &mut LRState,
+    v: VertexId,
+    // mut visitor: F,
+) -> Result<(), E>
+// where
+//     G: GraphBase + IntoEdges,
+//     G::NodeId: Hash + Eq,
+//     F: FnMut(&mut LRState<G>, LRTestDfsEvent<G::NodeId>) -> Result<(), E>,
+{
+    let mut stack: Vec<(VertexId, IntoIter<Edge<G>>)> = vec![(
+        v,
+        edges_filtered_and_sorted_by(
+            lr_state.graph,
+            v,
+            // if ``lowpt`` does *not* contain edge ``e = (v, w)``, it means
+            // that it's *not* a tree or a back edge so we skip it since
+            // it's oriented in the reverse direction.
+            |e| lr_state.lowpt.contains_key(e),
+            // we sort edges based on nesting depth order.
+            |e| lr_state.nesting_depth[e],
+        ),
+    )];
+
+    while let Some(elem) = stack.last_mut() {
+        let v = elem.0;
+        let adjacent_edges = &mut elem.1;
+        let mut next = None;
+
+        for (v, w) in adjacent_edges {
+            if Some(&(v, w)) == lr_state.eparent.get(&w) {
+                // tree edge
+                visitor(lr_state, LRTestDfsEvent::TreeEdge(v, w))?;
+                next = Some(w);
+                break;
+            } else {
+                // back edge
+                visitor(lr_state, LRTestDfsEvent::BackEdge(v, w))?;
+                visitor(lr_state, LRTestDfsEvent::FinishEdge(v, w))?;
+            }
+        }
+
+        match next {
+            Some(w) => stack.push((
+                w,
+                edges_filtered_and_sorted_by(
+                    lr_state.graph,
+                    w,
+                    |e| lr_state.lowpt.contains_key(e),
+                    |e| lr_state.nesting_depth[e],
+                ),
+            )),
+            None => {
+                stack.pop();
+                visitor(lr_state, LRTestDfsEvent::Finish(v))?;
+                if let Some(&(u, v)) = lr_state.eparent.get(&v) {
+                    visitor(lr_state, LRTestDfsEvent::FinishEdge(u, v))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
