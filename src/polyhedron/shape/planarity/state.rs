@@ -41,21 +41,19 @@ pub enum DfsEvent {
 }
 
 impl LRState {
-    pub fn new(graph: Distance) -> Self {
-        let v = graph.order();
+    pub fn new(graph: &Distance) -> Self {
         let e = graph.edges().count();
-        let side = graph.edges().map(|e| (e.into(), Sign::Plus)).collect();
         Self {
-            graph,
+            graph: graph.clone(),
             roots: Vec::new(),
-            height: HashMap::with_capacity(v),
+            height: HashMap::with_capacity(graph.order()),
             edge_parent: HashMap::with_capacity(e),
             low_point: HashMap::with_capacity(e),
             low_point_2: HashMap::with_capacity(e),
             low_point_edge: HashMap::with_capacity(e),
             nesting_depth: HashMap::with_capacity(e),
             eref: HashMap::with_capacity(e),
-            side,
+            side: graph.edges().map(|e| (e.into(), Sign::Plus)).collect(),
         }
     }
 

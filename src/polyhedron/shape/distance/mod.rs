@@ -135,7 +135,9 @@ impl Distance {
                 }
             }
         }
-        dupe.is_connected()
+
+        // dupe.is_connected()
+        dupe.is_planar()
     }
 
     /// Use a simple BFS to compute the shortest paths for all pairs

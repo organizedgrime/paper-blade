@@ -4,21 +4,24 @@ use super::{Distance, VertexId};
 mod state;
 use state::{DfsEvent, LRState, Time};
 
-pub fn is_planar(graph: Distance) -> bool {
-    let state = &mut LRState::new(graph.clone());
+impl Distance {
+
+pub fn is_planar(&self) -> bool {
+    let state = &mut LRState::new(self);
 
     let time = &mut 0;
-    let discovered = &mut HashSet::with_capacity(graph.order());
-    let finished = &mut HashSet::with_capacity(graph.order());
+    let discovered = &mut HashSet::with_capacity(self.order());
+    let finished = &mut HashSet::with_capacity(self.order());
 
     // DFS orientation phase
-    for node in graph.vertices() {
-        dfs_visitor(graph.clone(), node, state, discovered, finished, time);
+    for node in self.vertices() {
+        dfs_visitor(self.clone(), node, state, discovered, finished, time);
     }
 
     // L-R partition phase
 
     false
+}
 }
 
 /// Control flow for `depth_first_search` callbacks.
@@ -36,7 +39,7 @@ pub enum Control<B> {
 }
 
 fn dfs_visitor(
-    graph: Distance,
+     graph: Distance,
     u: VertexId,
     state: &mut LRState,
     //visitor: &mut F,
@@ -93,6 +96,7 @@ fn dfs_visitor(
 
     Control::Continue
 }
+
 fn time_post_inc(x: &mut Time) -> Time {
     let v = *x;
     *x += 1;
