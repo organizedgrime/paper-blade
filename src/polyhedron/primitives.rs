@@ -3,7 +3,7 @@ use std::ops::Index;
 
 pub type VertexId = usize;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Edge([VertexId; 2]);
 
 impl Into<[VertexId; 2]> for Edge {
