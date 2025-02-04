@@ -1,4 +1,3 @@
-
 use std::collections::{HashMap, HashSet};
 
 use super::{Distance, VertexId};
@@ -45,56 +44,54 @@ fn dfs_visitor(
     discovered: &mut HashSet<VertexId>,
     finished: &mut HashSet<VertexId>,
     time: &mut Time,
-) -> Control<usize>
-{
+) -> Control<usize> {
     if !discovered.insert(u) {
         return Control::Continue;
     }
     state.lr_orientation_visitor(DfsEvent::Discover(u, time_post_inc(time)));
-    Control::Continue
 
-        /* let mut stack: Vec<(G::NodeId, <G as IntoEdges>::Edges)> = Vec::new();
-        stack.push((u, graph.edges(u)));
+    let mut stack: Vec<(VertexId, Vec<VertexId>)> = Vec::new();
+    stack.push((u, graph.neighbors(u)));
 
-        while let Some(elem) = stack.last_mut() {
-            let u = elem.0;
-            let adjacent_edges = &mut elem.1;
-            let mut next = None;
-
-            for edge in adjacent_edges {
-                let v = edge.target();
-                if !discovered.is_visited(&v) {
-                    try_control!(visitor(DfsEvent::TreeEdge(u, v, edge.weight())), continue);
-                    discovered.visit(v);
-                    try_control!(
-                        visitor(DfsEvent::Discover(v, time_post_inc(time))),
-                        continue
-                    );
-                    next = Some(v);
-                    break;
-                } else if !finished.is_visited(&v) {
-                    try_control!(visitor(DfsEvent::BackEdge(u, v, edge.weight())), continue);
-                } else {
-                    try_control!(
-                        visitor(DfsEvent::CrossForwardEdge(u, v, edge.weight())),
-                        continue
-                    );
-                }
+    while let Some((u, neighbors)) = stack.last() {
+        let mut next = None;
+        for &v in neighbors {
+            // is_visited
+            if !discovered.contains(&v) {
+                //try_control!(visitor(), continue);
+                state.lr_orientation_visitor(DfsEvent::TreeEdge(*u, v));
+                discovered.insert(v);
+                // try_control!(
+                state.lr_orientation_visitor(DfsEvent::Discover(v, time_post_inc(time)));
+                //     continue
+                // );
+                next = Some(v);
+                break;
+            } else if !finished.contains(&v) {
+                // try_control!(
+                state.lr_orientation_visitor(DfsEvent::BackEdge(*u, v));
+                // , continue);
+            } else {
+                // try_control!(
+                state.lr_orientation_visitor(DfsEvent::CrossForwardEdge(*u, v));
+                //     continue
+                // );
             }
+        }
 
-            match next {
-                Some(v) => stack.push((v, graph.edges(v))),
-                None => {
-                    let first_finish = finished.visit(u);
-                    debug_assert!(first_finish);
-                    try_control!(
-                        visitor(DfsEvent::Finish(u, time_post_inc(time))),
-                        panic!("Pruning on the `DfsEvent::Finish` is not supported!")
-                    );
-                    stack.pop();
-                }
-            };
-        } */
+        match next {
+            Some(v) => stack.push((v, graph.neighbors(v))),
+            None => {
+                let first_finish = finished.insert(*u);
+                debug_assert!(first_finish);
+                state.lr_orientation_visitor(DfsEvent::Finish(*u, time_post_inc(time)));
+                //panic!("Pruning on the `DfsEvent::Finish` is not supported!")
+                stack.pop();
+            }
+        };
+    }
+
+    Control::Continue
 }
 fn time_post_inc(x: &mut Time) -> Time {
     let v = *x;

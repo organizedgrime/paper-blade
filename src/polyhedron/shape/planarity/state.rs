@@ -1,7 +1,10 @@
-use std::{cmp::Ordering, collections::{hash_map::Entry, HashMap}, hash::Hash};
+use std::{
+    cmp::Ordering,
+    collections::{hash_map::Entry, HashMap},
+    hash::Hash,
+};
 
-
-use crate::polyhedron::{shape::Distance, VertexId, Edge};
+use crate::polyhedron::{shape::Distance, Edge, VertexId};
 
 pub struct LRState {
     graph: Distance,
@@ -25,14 +28,14 @@ pub type Time = usize;
 pub enum DfsEvent {
     Discover(VertexId, Time),
     /// An edge of the tree formed by the traversal.
-    TreeEdge(VertexId, VertexId, Edge),
+    TreeEdge(VertexId, VertexId),
     /// An edge to an already visited node.
-    BackEdge(VertexId, VertexId, Edge),
+    BackEdge(VertexId, VertexId),
     /// A cross or forward edge.
     ///
     /// For an edge *(u, v)*, if the discover time of *v* is greater than *u*,
     /// then it is a forward edge, else a cross edge.
-    CrossForwardEdge(VertexId, VertexId, Edge),
+    CrossForwardEdge(VertexId, VertexId),
     /// All edges from a node have been reported.
     Finish(VertexId, Time),
 }
@@ -64,7 +67,7 @@ impl LRState {
                     self.roots.push(v);
                 }
             }
-            DfsEvent::TreeEdge(v, w, _) => {
+            DfsEvent::TreeEdge(v, w) => {
                 let ei = [v, w].into();
                 let v_height = self.height[&v];
                 let w_height = v_height + 1;
@@ -75,7 +78,7 @@ impl LRState {
                 self.low_point.insert(ei, v_height);
                 self.low_point_2.insert(ei, w_height);
             }
-            DfsEvent::BackEdge(v, w, _) => {
+            DfsEvent::BackEdge(v, w) => {
                 // do *not* consider ``(v, w)`` as a back edge if ``(w, v)`` is a tree edge.
                 let edge = [v, w].into();
                 if Some(&edge) != self.edge_parent.get(&v) {
@@ -111,8 +114,10 @@ impl LRState {
                     if let Some(e_par) = self.edge_parent.get(&v) {
                         match self.low_point[&ei].cmp(&self.low_point[e_par]) {
                             Ordering::Less => {
-                                self.low_point_2
-                                    .insert(*e_par, self.low_point[e_par].min(self.low_point_2[&ei]));
+                                self.low_point_2.insert(
+                                    *e_par,
+                                    self.low_point[e_par].min(self.low_point_2[&ei]),
+                                );
                                 self.low_point.insert(*e_par, self.low_point[&ei]);
                             }
                             Ordering::Greater => {
@@ -145,6 +150,5 @@ where
 
 enum Sign {
     Plus,
-    Minus
+    Minus,
 }
-

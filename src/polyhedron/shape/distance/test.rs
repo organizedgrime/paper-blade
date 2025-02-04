@@ -1,6 +1,5 @@
 use super::*;
 
-
 impl Distance {
     pub fn floyd(&mut self) {
         // let dist be a |V| × |V| array of minimum distances initialized to ∞ (infinity)

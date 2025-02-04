@@ -26,7 +26,7 @@ use iced_widget::{
 use ultraviolet::{Vec3, Vec4};
 
 mod primitives;
-pub use primitives::{VertexId, Edge};
+pub use primitives::{Edge, VertexId};
 
 pub const SPEED_DAMPENING: f32 = 0.92;
 
