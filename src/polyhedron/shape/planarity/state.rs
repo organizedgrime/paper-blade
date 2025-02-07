@@ -7,19 +7,19 @@ use std::{
 use crate::polyhedron::{shape::Distance, Edge, VertexId};
 
 pub struct LRState {
-    graph: Distance,
+    pub graph: Distance,
     pub roots: Vec<VertexId>,
-    height: HashMap<VertexId, usize>,
-    edge_parent: HashMap<VertexId, Edge>,
-    low_point: HashMap<Edge, usize>,
-    low_point_2: HashMap<Edge, usize>,
-    low_point_edge: HashMap<Edge, Edge>,
-    nesting_depth: HashMap<Edge, usize>,
-    stack: Vec<ConflictPair<Edge>>,
-    stack_emarker: HashMap<Edge, ConflictPair<Edge>>,
-    eref: HashMap<Edge, Edge>,
+    pub height: HashMap<VertexId, usize>,
+    pub edge_parent: HashMap<VertexId, Edge>,
+    pub low_point: HashMap<Edge, usize>,
+    pub low_point_2: HashMap<Edge, usize>,
+    pub low_point_edge: HashMap<Edge, Edge>,
+    pub nesting_depth: HashMap<Edge, usize>,
+    pub stack: Vec<ConflictPair<Edge>>,
+    pub stack_emarker: HashMap<Edge, ConflictPair<Edge>>,
+    pub eref: HashMap<Edge, Edge>,
     /// side of edge, or modifier for side of reference edge.
-    side: HashMap<Edge, Sign>,
+    pub side: HashMap<Edge, Sign>,
 }
 
 pub type Time = usize;
@@ -42,14 +42,14 @@ pub enum DfsEvent {
 
 /// Similar to ``DfsEvent`` plus an extra event ``FinishEdge``
 /// that indicates that we have finished processing an edge.
-enum LRTestDfsEvent {
+pub enum LRTestDfsEvent {
     Finish(VertexId),
-    TreeEdge(VertexId, VertexId),
-    BackEdge(VertexId, VertexId),
-    FinishEdge(VertexId, VertexId),
+    TreeEdge(Edge),
+    BackEdge(Edge),
+    FinishEdge(Edge),
 }
 
-struct NonPlanar {}
+pub struct NonPlanar {}
 
 impl LRState {
     pub fn new(graph: &Distance) -> Self {
@@ -149,30 +149,30 @@ impl LRState {
     pub fn lr_testing_visitor(&mut self, event: LRTestDfsEvent) -> Result<(), NonPlanar> {
         match event {
             LRTestDfsEvent::TreeEdge(v, w) => {
-                let ei = (v, w);
+                let edge: Edge = [v, w].into();
                 if let Some(&last) = self.stack.last() {
-                    self.stack_emarker.insert(ei, last);
+                    self.stack_emarker.insert(edge, last);
                 }
             }
             LRTestDfsEvent::BackEdge(v, w) => {
-                let ei = (v, w);
+                let edge: Edge = [v, w].into();
                 if let Some(&last) = self.stack.last() {
-                    self.stack_emarker.insert(ei, last);
+                    self.stack_emarker.insert(edge, last);
                 }
-                self.lowpt_edge.insert(ei, ei);
-                let c_pair = ConflictPair::new(Interval::default(), Interval::new(ei, ei));
+                self.low_point_edge.insert(edge, edge);
+                let c_pair = ConflictPair::new(Interval::default(), Interval::new(edge, edge));
                 self.stack.push(c_pair);
             }
             LRTestDfsEvent::FinishEdge(v, w) => {
-                let ei = (v, w);
-                if self.lowpt[&ei] < self.height[&v] {
+                let edge: Edge = [v, w].into();
+                if self.low_point[&edge] < self.height[&v] {
                     // ei has return edge
-                    let e_par = self.eparent[&v];
-                    let val = self.lowpt_edge[&ei];
+                    let e_par = self.edge_parent[&v];
+                    let val = self.low_point_edge[&edge];
 
-                    match self.lowpt_edge.entry(e_par) {
+                    match self.low_point_edge.entry(e_par) {
                         Entry::Occupied(_) => {
-                            self.add_constraints(ei, e_par)?;
+                            self.add_constraints(edge, e_par)?;
                         }
                         Entry::Vacant(o) => {
                             o.insert(val);
@@ -181,7 +181,8 @@ impl LRState {
                 }
             }
             LRTestDfsEvent::Finish(v) => {
-                if let Some(&e) = self.eparent.get(&v) {
+                if let Some(&e) = self.edge_parent.get(&v) {
+                    //(*e)
                     let u = e.0;
                     self.remove_back_edges(u);
 
@@ -232,16 +233,17 @@ impl LRState {
             // ``q_pair.right``, ``q_pair.left`` can't be both empty
             // since we don't push empty conflict pairs in stack.
             let qr_low = q_pair.right.low().unwrap();
-            if self.lowpt[qr_low] > self.lowpt[&e] {
+            if self.low_point[qr_low] > self.low_point[&e] {
                 // merge intervals
-                self.union_intervals(&mut c_pair.right, q_pair.right);
+                //self.union_intervals(&mut c_pair.right, q_pair.right);
             } else {
                 // make consinsent
-                self.eref.insert(*qr_low, self.lowpt_edge[&e]);
+                self.eref.insert(*qr_low, self.low_point_edge[&e]);
             }
         }
-    }
 
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
@@ -275,8 +277,7 @@ impl<T> ConflictPair<T> {
 
 impl<T> ConflictPair<(T, T)> {
     /// Returns the lowest low point of a conflict pair.
-    fn lowest(&self, lr_state: &LRState) -> usize
-    {
+    fn lowest(&self, lr_state: &LRState) -> usize {
         match (self.left.low(), self.right.low()) {
             (Some(l_low), Some(r_low)) => lr_state.low_point[l_low].min(lr_state.low_point[r_low]),
             (Some(l_low), None) => lr_state.low_point[l_low],
@@ -286,10 +287,17 @@ impl<T> ConflictPair<(T, T)> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Default)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct Interval<T> {
     inner: Option<(T, T)>,
 }
+
+impl<T> Default for Interval<T> {
+    fn default() -> Self {
+        Self { inner: None }
+    }
+}
+
 impl<T> Interval<T> {
     fn new(low: T, high: T) -> Self {
         Interval {
@@ -340,12 +348,9 @@ where
     T: Copy + Hash + Eq,
 {
     /// Returns ``true`` if the interval conflicts with ``edge``.
-    fn conflict<G>(&self, lr_state: &LRState<G>, edge: Edge<G>) -> bool
-    where
-        G: GraphBase<NodeId = T>,
-    {
+    fn conflict(&self, lr_state: &LRState, edge: Edge) -> bool {
         match self.inner {
-            Some((_, ref h)) => lr_state.lowpt.get(h) > lr_state.lowpt.get(&edge),
+            Some((_, ref h)) => lr_state.low_point.get(h) > lr_state.low_point.get(&edge),
             _ => false,
         }
     }

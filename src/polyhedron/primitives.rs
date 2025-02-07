@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::Index;
+use std::ops::{Deref, Index};
 
 pub type VertexId = usize;
 
@@ -24,6 +24,18 @@ impl PartialEq for Edge {
 }
 
 impl Eq for Edge {}
+
+impl Edge {
+    pub fn v(&self) -> VertexId {
+        self.0[0]
+    }
+    pub fn w(&self) -> VertexId {
+        self.0[1]
+    }
+    pub fn inner(&self) -> [VertexId; 2] {
+        self.0
+    }
+}
 
 impl Index<usize> for Edge {
     type Output = VertexId;

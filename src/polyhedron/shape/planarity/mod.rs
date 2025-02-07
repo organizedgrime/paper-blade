@@ -1,37 +1,38 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
-use super::{Distance, VertexId};
+use super::{Distance, Edge, VertexId};
 mod state;
-use state::{DfsEvent, LRState, Time};
+use state::{DfsEvent, LRState, LRTestDfsEvent, NonPlanar, Time};
 
 impl Distance {
+    pub fn is_planar(&self) -> bool {
+        let state = &mut LRState::new(self);
 
-pub fn is_planar(&self) -> bool {
-    let state = &mut LRState::new(self);
+        let time = &mut 0;
+        let discovered = &mut HashSet::with_capacity(self.order());
+        let finished = &mut HashSet::with_capacity(self.order());
 
-    let time = &mut 0;
-    let discovered = &mut HashSet::with_capacity(self.order());
-    let finished = &mut HashSet::with_capacity(self.order());
+        // DFS orientation phase
+        for node in self.vertices() {
+            dfs_visitor(self.clone(), node, state, discovered, finished, time);
+        }
 
-    // DFS orientation phase
-    for node in self.vertices() {
-        dfs_visitor(self.clone(), node, state, discovered, finished, time);
+        // L-R partition phase
+
+        for v in state.roots.clone() {
+            // let res = lr_visit_ordered_dfs_tree(&mut state, v, |state, event| {
+            //     state.lr_testing_visitor(event)
+            // });
+            // if res.is_err() {
+            //     return false;
+            // }
+        }
+
+        false
     }
-
-    // L-R partition phase
-
-    for v in state.roots.clone() {
-        // let res = lr_visit_ordered_dfs_tree(&mut state, v, |state, event| {
-        //     state.lr_testing_visitor(event)
-        // });
-        // if res.is_err() {
-        //     return false;
-        // }
-    }
-
-
-    false
-}
 }
 
 /// Control flow for `depth_first_search` callbacks.
@@ -49,7 +50,7 @@ pub enum Control<B> {
 }
 
 fn dfs_visitor(
-     graph: Distance,
+    graph: Distance,
     u: VertexId,
     state: &mut LRState,
     //visitor: &mut F,
@@ -112,69 +113,60 @@ fn time_post_inc(x: &mut Time) -> Time {
     *x += 1;
     v
 }
-
+// Filter edges by key and sort by nesting depth
+// This allows us to ignore edges which are not tree or back edges,
+// meaning we can skip it because it's going the wrong direction.
+fn remaining_edges(w: VertexId, lr_state: &LRState) -> Vec<Edge> {
+    let mut edges: Vec<Edge> = lr_state
+        .graph
+        .neighbors(w)
+        .into_iter()
+        .filter_map(|v| {
+            let e: Edge = [v, w].into();
+            lr_state.low_point.contains_key(&e).then_some(e)
+        })
+        .collect();
+    edges.sort_by_key(|edge| lr_state.nesting_depth[edge]);
+    // Remove parallel edges, which have no impact on planarity
+    edges.dedup();
+    edges
+}
 
 /// Visits the DFS - oriented tree that we have pre-computed
 /// and stored in ``lr_state``. We traverse the edges of
 /// a node in nesting depth order. Events are emitted at points
 /// of interest and should be handled by ``visitor``.
-fn lr_visit_ordered_dfs_tree<G, F, E>(
-    lr_state: &mut LRState,
-    v: VertexId,
-    // mut visitor: F,
-) -> Result<(), E>
-// where
-//     G: GraphBase + IntoEdges,
-//     G::NodeId: Hash + Eq,
-//     F: FnMut(&mut LRState<G>, LRTestDfsEvent<G::NodeId>) -> Result<(), E>,
-{
-    let mut stack: Vec<(VertexId, IntoIter<Edge<G>>)> = vec![(
-        v,
-        edges_filtered_and_sorted_by(
-            lr_state.graph,
-            v,
-            // if ``lowpt`` does *not* contain edge ``e = (v, w)``, it means
-            // that it's *not* a tree or a back edge so we skip it since
-            // it's oriented in the reverse direction.
-            |e| lr_state.lowpt.contains_key(e),
-            // we sort edges based on nesting depth order.
-            |e| lr_state.nesting_depth[e],
-        ),
-    )];
+fn lr_visit_ordered_dfs_tree(lr_state: &mut LRState, v: VertexId) -> Result<(), NonPlanar> {
+    let mut stack: Vec<(VertexId, Vec<Edge>)> = vec![(v, remaining_edges(v, lr_state))];
 
     while let Some(elem) = stack.last_mut() {
         let v = elem.0;
-        let adjacent_edges = &mut elem.1;
+        let adjacent_edges = elem.1.clone();
         let mut next = None;
 
-        for (v, w) in adjacent_edges {
-            if Some(&(v, w)) == lr_state.eparent.get(&w) {
-                // tree edge
-                visitor(lr_state, LRTestDfsEvent::TreeEdge(v, w))?;
-                next = Some(w);
-                break;
-            } else {
-                // back edge
-                visitor(lr_state, LRTestDfsEvent::BackEdge(v, w))?;
-                visitor(lr_state, LRTestDfsEvent::FinishEdge(v, w))?;
+        {
+            for edge in adjacent_edges {
+                if Some(edge) == lr_state.edge_parent.get(&edge.w()).copied() {
+                    lr_state.lr_testing_visitor(LRTestDfsEvent::TreeEdge(edge))?;
+                    next = Some(edge.w());
+                    break;
+                } else {
+                    lr_state.lr_testing_visitor(LRTestDfsEvent::BackEdge(edge))?;
+                    lr_state.lr_testing_visitor(LRTestDfsEvent::FinishEdge(edge))?;
+                }
             }
         }
 
         match next {
-            Some(w) => stack.push((
-                w,
-                edges_filtered_and_sorted_by(
-                    lr_state.graph,
-                    w,
-                    |e| lr_state.lowpt.contains_key(e),
-                    |e| lr_state.nesting_depth[e],
-                ),
-            )),
+            Some(w) => {
+                stack.push((w, remaining_edges(w, lr_state)));
+            }
             None => {
                 stack.pop();
-                visitor(lr_state, LRTestDfsEvent::Finish(v))?;
-                if let Some(&(u, v)) = lr_state.eparent.get(&v) {
-                    visitor(lr_state, LRTestDfsEvent::FinishEdge(u, v))?;
+                lr_state.lr_testing_visitor(LRTestDfsEvent::Finish(v))?;
+
+                if let Some(&edge) = lr_state.edge_parent.get(&v) {
+                    lr_state.lr_testing_visitor(LRTestDfsEvent::FinishEdge(edge))?;
                 }
             }
         }
