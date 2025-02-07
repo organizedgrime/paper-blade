@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::ops::{Deref, Index};
+use std::ops::Index;
 
 pub type VertexId = usize;
 

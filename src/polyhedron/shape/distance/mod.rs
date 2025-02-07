@@ -6,7 +6,6 @@ mod svg;
 mod test;
 
 use crate::polyhedron::VertexId;
-use std::collections::HashSet;
 use std::{
     fmt::Display,
     ops::{Index, IndexMut, Range},
@@ -107,7 +106,7 @@ impl Distance {
         self.vertex_pairs().map(|e| self[e]).max().unwrap_or(0)
     }
 
-    fn dfs(&self, visited: &mut HashSet<usize>, v: usize) {
+    /* fn dfs(&self, visited: &mut HashSet<usize>, v: usize) {
         visited.insert(v);
         for u in self.neighbors(v) {
             if !visited.contains(&u) {
@@ -120,7 +119,7 @@ impl Distance {
         let mut visited = HashSet::new();
         self.dfs(&mut visited, 0);
         visited.len() == self.order()
-    }
+    } */
 
     /// This functiona and the helpers it relies on should soon be superceded by
     /// a proper plane embedding.

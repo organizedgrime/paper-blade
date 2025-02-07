@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-};
+use std::collections::HashSet;
 
 use super::{Distance, Edge, VertexId};
 mod state;
@@ -21,17 +18,13 @@ impl Distance {
         }
 
         // L-R partition phase
-
         for v in state.roots.clone() {
-            // let res = lr_visit_ordered_dfs_tree(&mut state, v, |state, event| {
-            //     state.lr_testing_visitor(event)
-            // });
-            // if res.is_err() {
-            //     return false;
-            // }
+            if lr_visit_ordered_dfs_tree(state, v).is_err() {
+                return false;
+            }
         }
 
-        false
+        true
     }
 }
 
@@ -62,7 +55,8 @@ fn dfs_visitor(
     if !discovered.insert(u) {
         return Control::Continue;
     }
-    state.lr_orientation_visitor(DfsEvent::Discover(u, time_post_inc(time)));
+    time_post_inc(time);
+    state.lr_orientation_visitor(DfsEvent::Discover(u));
 
     let mut stack: Vec<(VertexId, Vec<VertexId>)> = Vec::new();
     stack.push((u, graph.neighbors(u)));
@@ -70,24 +64,26 @@ fn dfs_visitor(
     while let Some((u, neighbors)) = stack.last() {
         let mut next = None;
         for &v in neighbors {
+            let edge: Edge = [*u, v].into();
             // is_visited
             if !discovered.contains(&v) {
                 //try_control!(visitor(), continue);
-                state.lr_orientation_visitor(DfsEvent::TreeEdge(*u, v));
+                state.lr_orientation_visitor(DfsEvent::TreeEdge(edge));
                 discovered.insert(v);
                 // try_control!(
-                state.lr_orientation_visitor(DfsEvent::Discover(v, time_post_inc(time)));
-                //     continue
-                // );
+                time_post_inc(time);
+                state.lr_orientation_visitor(DfsEvent::Discover(v)); //, time_post_inc(time)));
+                                                                     //     continue
+                                                                     // );
                 next = Some(v);
                 break;
             } else if !finished.contains(&v) {
                 // try_control!(
-                state.lr_orientation_visitor(DfsEvent::BackEdge(*u, v));
+                state.lr_orientation_visitor(DfsEvent::BackEdge(edge));
                 // , continue);
             } else {
                 // try_control!(
-                state.lr_orientation_visitor(DfsEvent::CrossForwardEdge(*u, v));
+                state.lr_orientation_visitor(DfsEvent::CrossForwardEdge(edge));
                 //     continue
                 // );
             }
@@ -98,7 +94,8 @@ fn dfs_visitor(
             None => {
                 let first_finish = finished.insert(*u);
                 debug_assert!(first_finish);
-                state.lr_orientation_visitor(DfsEvent::Finish(*u, time_post_inc(time)));
+                time_post_inc(time);
+                state.lr_orientation_visitor(DfsEvent::Finish(*u));
                 //panic!("Pruning on the `DfsEvent::Finish` is not supported!")
                 stack.pop();
             }

@@ -211,6 +211,26 @@ impl LRState {
         Ok(())
     }
 
+    fn until_top_of_stack_hits_emarker(&mut self, edge: Edge) -> Option<ConflictPair<Edge>> {
+        if let Some(&c_pair) = self.stack.last() {
+            if self.stack_emarker[&edge] != c_pair {
+                return self.stack.pop();
+            }
+        }
+
+        None
+    }
+
+    fn until_top_of_stack_is_conflicting(&mut self, ei: Edge) -> Option<ConflictPair<Edge>> {
+        if let Some(c_pair) = self.stack.last() {
+            if c_pair.left.conflict(self, ei) || c_pair.right.conflict(self, ei) {
+                return self.stack.pop();
+            }
+        }
+
+        None
+    }
+
     /// Adding constraints associated with edge ``ei``.
     fn add_constraints(&mut self, ei: Edge, e: Edge) -> Result<(), NonPlanar> {
         let mut c_pair = ConflictPair::<Edge>::default();
@@ -231,19 +251,133 @@ impl LRState {
             let qr_low = q_pair.right.low().unwrap();
             if self.low_point[qr_low] > self.low_point[&e] {
                 // merge intervals
-                //self.union_intervals(&mut c_pair.right, q_pair.right);
+                self.union_intervals(&mut c_pair.right, q_pair.right);
             } else {
                 // make consinsent
                 self.eref.insert(*qr_low, self.low_point_edge[&e]);
             }
         }
 
+        // merge conflicting return edges of e1, . . . , ei−1 into ``c_pair.left``.
+        while let Some(mut q_pair) = self.until_top_of_stack_is_conflicting(ei) {
+            if q_pair.right.conflict(self, ei) {
+                q_pair.swap();
+
+                if q_pair.right.conflict(self, ei) {
+                    return Err(NonPlanar {});
+                }
+            }
+
+            // merge interval below lowpt(ei) into ``c_pair.right``.
+            if let Some((qr_low, qr_high)) = q_pair.right.as_ref() {
+                if let Some(pr_low) = c_pair.right.as_mut_low() {
+                    self.eref.insert(*pr_low, *qr_high);
+                    *pr_low = *qr_low;
+                }
+            };
+            self.union_intervals(&mut c_pair.left, q_pair.left);
+        }
+
+        if !c_pair.is_empty() {
+            self.stack.push(c_pair);
+        }
+
         Ok(())
+    }
+
+    /// Unify intervals ``pi``, ``qi``.
+    ///
+    /// Interval ``qi`` must be non - empty and contain edges
+    /// with smaller lowpt than interval ``pi``.
+    fn union_intervals(&mut self, pi: &mut Interval<Edge>, qi: Interval<Edge>) {
+        match pi.as_mut_low() {
+            Some(p_low) => {
+                let (q_low, q_high) = qi.unwrap();
+                self.eref.insert(*p_low, q_high);
+                *p_low = q_low;
+            }
+            None => {
+                *pi = qi;
+            }
+        }
+    }
+    // fn is_target<G: GraphBase>(edge: Option<&Edge<G>>, v: G::NodeId) -> Option<&Edge<G>> {
+    //     edge.filter(|e| e.1 == v)
+    // }
+    fn follow_eref_until_is_target(&self, edge: Edge, v: VertexId) -> Option<Edge> {
+        let mut res = Some(&edge);
+        while let Some(b) = res.filter(|e| e.w() == v) {
+            res = self.eref.get(b);
+        }
+
+        res.copied()
+    }
+
+    fn until_lowest_top_of_stack_has_height(&mut self, v: VertexId) -> Option<ConflictPair<Edge>> {
+        if let Some(c_pair) = self.stack.last() {
+            if c_pair.lowest(self) == self.height[&v] {
+                return self.stack.pop();
+            }
+        }
+
+        None
+    }
+    /// Trim back edges ending at parent v.
+    fn remove_back_edges(&mut self, v: VertexId) {
+        // drop entire conflict pairs.
+        while let Some(c_pair) = self.until_lowest_top_of_stack_has_height(v) {
+            if let Some(pl_low) = c_pair.left.low() {
+                self.side.insert(*pl_low, Sign::Minus);
+            }
+        }
+
+        // one more conflict pair to consider.
+        if let Some(mut c_pair) = self.stack.pop() {
+            // trim left interval.
+            if let Some((pl_low, pl_high)) = c_pair.left.as_mut() {
+                match self.follow_eref_until_is_target(*pl_high, v) {
+                    Some(val) => {
+                        *pl_high = val;
+                    }
+                    None => {
+                        // just emptied.
+                        // We call unwrap since right interval cannot be empty for otherwise
+                        // the entire conflict pair had been removed.
+                        let pr_low = c_pair.right.low().unwrap();
+                        self.eref.insert(*pl_low, *pr_low);
+                        self.side.insert(*pl_low, Sign::Minus);
+                        c_pair.left = Interval::default();
+                    }
+                }
+            }
+
+            // trim right interval
+            if let Some((pr_low, ref mut pr_high)) = c_pair.right.as_mut() {
+                match self.follow_eref_until_is_target(*pr_high, v) {
+                    Some(val) => {
+                        *pr_high = val;
+                    }
+                    None => {
+                        // just emptied.
+                        // We call unwrap since left interval cannot be empty for otherwise
+                        // the entire conflict pair had been removed.
+                        let pl_low = c_pair.left.low().unwrap();
+                        self.eref.insert(*pr_low, *pl_low);
+                        self.side.insert(*pr_low, Sign::Minus);
+                        c_pair.right = Interval::default();
+                    }
+                };
+            }
+
+            if !c_pair.is_empty() {
+                self.stack.push(c_pair);
+            }
+        }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
-struct ConflictPair<T> {
+pub struct ConflictPair<T> {
     left: Interval<T>,
     right: Interval<T>,
 }
@@ -271,7 +405,7 @@ impl<T> ConflictPair<T> {
     }
 }
 
-impl<T> ConflictPair<(T, T)> {
+impl ConflictPair<Edge> {
     /// Returns the lowest low point of a conflict pair.
     fn lowest(&self, lr_state: &LRState) -> usize {
         match (self.left.low(), self.right.low()) {
@@ -282,7 +416,6 @@ impl<T> ConflictPair<(T, T)> {
         }
     }
 }
-
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct Interval<T> {
     inner: Option<(T, T)>,
@@ -339,10 +472,7 @@ impl<T> Interval<T> {
     }
 }
 
-impl<T> Interval<(T, T)>
-where
-    T: Copy + Hash + Eq,
-{
+impl Interval<Edge> {
     /// Returns ``true`` if the interval conflicts with ``edge``.
     fn conflict(&self, lr_state: &LRState, edge: Edge) -> bool {
         match self.inner {
@@ -364,7 +494,7 @@ where
     });
 }
 
-enum Sign {
+pub enum Sign {
     Plus,
     Minus,
 }
